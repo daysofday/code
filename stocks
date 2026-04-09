@@ -1,0 +1,52 @@
+import requests
+import apimoex
+import pandas as pd
+
+def get_bond_data_safe(security_id, start_date, end_date):
+    """Безопасное получение данных об облигации."""
+    with requests.Session() as session:
+        # Пробуем разные варианты запроса
+        for board in [None, 'TQCB', 'TQOB']:
+            try:
+                kwargs = {
+                    'session': session,
+                    'security': security_id,
+                    'start': start_date,
+                    'end': end_date,
+                    'market': 'bonds',
+                    'engine': 'stock'
+                }
+                if board:
+                    kwargs['board'] = board
+                
+                data = apimoex.get_market_history(**kwargs)
+                if data:
+                    df = pd.DataFrame(data)
+                    if 'TRADEDATE' in df.columns:
+                        df['TRADEDATE'] = pd.to_datetime(df['TRADEDATE'])
+                        df = df.set_index('TRADEDATE')
+                        df = df.sort_index()
+                    return df
+            except Exception as e:
+                print(f"Ошибка с board={board}: {e}")
+                continue
+        
+        return pd.DataFrame()
+
+# Получаем данные
+ticker = "SU26238RMFS4"
+df_bond = get_bond_data_safe(ticker, '2023-01-01', '2023-12-31')
+
+if not df_bond.empty:
+    print("Доступные колонки:", df_bond.columns.tolist())
+    
+    # Выбираем колонки, которые точно есть
+    price_columns = ['CLOSE']
+    if 'LEGALCLOSEPRICE' in df_bond.columns:
+        price_columns.append('LEGALCLOSEPRICE')
+    if 'WAPRICE' in df_bond.columns:
+        price_columns.append('WAPRICE')
+        
+    print(f"\nДанные по ценам:\n{df_bond[price_columns].head()}")
+else:
+    print("Не удалось получить данные. Проверьте тикер и даты.")
